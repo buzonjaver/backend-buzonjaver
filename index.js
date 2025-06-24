@@ -1,33 +1,25 @@
-const nodemailer = require("nodemailer");
-const cors = require("cors");
+import nodemailer from "nodemailer";
+import cors from "cors";
+import express from "express";
+import fetch from "node-fetch";
 
-// node-fetch v3 usa ESM, por eso usamos import dinámico:
-const fetch = (...args) =>
-  import("node-fetch").then(({ default: fetch }) => fetch(...args));
+const app = express();
 
-const corsMiddleware = cors({
-  origin: "*", // Cambia esto a tu dominio real en producción
-  methods: ["POST"],
-});
+// Middleware CORS
+app.use(
+  cors({
+    origin: "*", // Cambia a tu dominio en producción
+    methods: ["POST"],
+  }),
+);
 
-function runMiddleware(req, res, fn) {
-  return new Promise((resolve, reject) => {
-    fn(req, res, (result) => {
-      if (result instanceof Error) return reject(result);
-      return resolve(result);
-    });
-  });
-}
+// Middleware para parsear JSON
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-module.exports = async (req, res) => {
-  await runMiddleware(req, res, corsMiddleware);
-
-  if (req.method !== "POST") {
-    return res.status(405).json({ message: "Method Not Allowed" });
-  }
-
-  // Aquí recibimos el token con el nombre que envía el formulario: "g-recaptcha-response"
-  const { nombre, email, mensaje, "g-recaptcha-response": token } = req.body;
+// Ruta POST /enviar-correo
+app.post("/enviar-correo", async (req, res) => {
+  const { nombre, email, mensaje, token } = req.body;
 
   // Validación básica
   if (!nombre || !email || !mensaje || !token) {
@@ -42,7 +34,7 @@ module.exports = async (req, res) => {
     const response = await fetch(recaptchaURL, { method: "POST" });
     const data = await response.json();
 
-    if (!data.success || data.score < 0.5) {
+    if (!data.success || (data.score !== undefined && data.score < 0.5)) {
       return res
         .status(403)
         .json({ message: "reCAPTCHA inválido o sospechoso" });
@@ -76,4 +68,10 @@ module.exports = async (req, res) => {
     console.error("Error al enviar correo:", error);
     return res.status(500).json({ message: "Error al enviar el correo" });
   }
-};
+});
+
+// Servidor escuchando en puerto 3000 o puerto definido en env
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Servidor escuchando en puerto ${PORT}`);
+});
