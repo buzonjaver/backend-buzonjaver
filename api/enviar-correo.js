@@ -3,6 +3,11 @@ import fetch from "node-fetch";
 
 const RECAPTCHA_SECRET_KEY = "6LdxGWwrAAAAAO-3qxxIISBNTKMeuU5d8GbO1qC-";
 
+const allowedOrigins = [
+  "https://casas-javer.github.io",
+  "https://buzonjaver.com",
+];
+
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -12,17 +17,23 @@ const transporter = nodemailer.createTransport({
 });
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  const origin = req.headers.origin || req.headers.referer || "";
+
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
 
   if (req.method !== "POST") {
     return res.status(405).json({ message: "Método no permitido" });
   }
 
-  const origin = req.headers.origin || req.headers.referer || "";
   const isBuzon = origin.includes("buzonjaver.com");
 
   const {
@@ -34,12 +45,11 @@ export default async function handler(req, res) {
     "g-recaptcha-response": token,
   } = req.body;
 
-  // Validar campos básicos
   if (!nombre || !telefono || !email || !desarrollo || !mensaje) {
     return res.status(400).json({ message: "Faltan campos requeridos" });
   }
 
-  // Validar reCAPTCHA solo si NO viene de buzonjaver
+  // Solo validar reCAPTCHA si NO viene de buzonjaver.com
   if (!isBuzon) {
     if (!token) {
       return res
@@ -87,6 +97,7 @@ Mensaje: ${mensaje}
 
   try {
     await transporter.sendMail(mailOptions);
+
     if (isBuzon) {
       // Redirige si viene de buzonjaver.com
       return res.redirect(
