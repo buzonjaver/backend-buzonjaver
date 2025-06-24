@@ -6,7 +6,7 @@ const fetch = (...args) =>
   import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
 const corsMiddleware = cors({
-  origin: "*", // Cambia esto a tu dominio en producción
+  origin: "*", // Cambia esto a tu dominio real en producción
   methods: ["POST"],
 });
 
@@ -20,7 +20,11 @@ function runMiddleware(req, res, fn) {
 }
 
 module.exports = async (req, res) => {
-  await runMiddleware(req, res, corsMiddleware);
+  try {
+    await runMiddleware(req, res, corsMiddleware);
+  } catch (error) {
+    return res.status(500).json({ message: "Error en CORS" });
+  }
 
   if (req.method !== "POST") {
     return res.status(405).json({ message: "Method Not Allowed" });
@@ -28,7 +32,6 @@ module.exports = async (req, res) => {
 
   const { nombre, correo, mensaje, token } = req.body;
 
-  // Validación básica
   if (!nombre || !correo || !mensaje || !token) {
     return res.status(400).json({ message: "Faltan campos requeridos" });
   }
@@ -38,13 +41,11 @@ module.exports = async (req, res) => {
     const secretKey = process.env.RECAPTCHA_SECRET_KEY;
     const recaptchaURL = `https://www.google.com/recaptcha/api/siteverify?secret=${secretKey}&response=${token}`;
 
-    const response = await fetch(recaptchaURL, {
-      method: "POST",
-    });
-
+    const response = await fetch(recaptchaURL, { method: "POST" });
     const data = await response.json();
 
-    if (!data.success || data.score < 0.5) {
+    // Si usas reCAPTCHA v3 evalúa también el score
+    if (!data.success || (data.score !== undefined && data.score < 0.5)) {
       return res
         .status(403)
         .json({ message: "reCAPTCHA inválido o sospechoso" });
@@ -54,9 +55,9 @@ module.exports = async (req, res) => {
     return res.status(500).json({ message: "Error al verificar reCAPTCHA" });
   }
 
-  // Configurar transporte de nodemailer
+  // Configurar transporte nodemailer
   const transporter = nodemailer.createTransport({
-    host: "smtp.tu-servidor.com",
+    host: "smtp.tu-servidor.com", // Cambia esto
     port: 465,
     secure: true,
     auth: {
@@ -68,7 +69,7 @@ module.exports = async (req, res) => {
   try {
     await transporter.sendMail({
       from: `"${nombre}" <${correo}>`,
-      to: "tu-correo@ejemplo.com",
+      to: "tu-correo@ejemplo.com", // Cambia esto a tu email destino
       subject: "Nuevo mensaje desde el formulario",
       text: mensaje,
     });
