@@ -48,7 +48,7 @@ app.post("/enviar-correo", (req, res) => {
   // Configurar los datos del correo
   let mailOptions = {
     from: "grupojaver@gmail.com", // Cambiar por tu dirección de correo
-    to: "ctrevinov@javer.com.mx", // Dirección de correo a la que se enviará el formulario
+    to: "reno7882@gmail.com", // Dirección de correo a la que se enviará el formulario
     subject: "Nuevo mensaje Sugerencia / recomendación",
     text: `Nombre: ${nombre}\nTeléfono: ${telefono}\nEmail: ${email}\nDesarrollo: ${desarrollo}\nMensaje: ${mensaje}`,
     bcc: "rct@javer.com.mx", // Dirección de correo en copia oculta (BCC)
