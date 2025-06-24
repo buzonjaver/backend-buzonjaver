@@ -2,12 +2,14 @@ const express = require("express");
 const nodemailer = require("nodemailer");
 const bodyParser = require("body-parser");
 const cors = require("cors");
+const fetch = require("node-fetch"); // Asegúrate de instalar esto con npm
 
 const app = express();
 app.disable("x-powered-by");
 const PORT = process.env.PORT || 3000;
 
-// Middleware para analizar los cuerpos de las solicitudes en formato JSON
+const RECAPTCHA_SECRET = "6LdxGWwrAAAAAO-3qxxIISBNTKMeuU5d8GbO1qC-"; // <-- Usa tu clave secreta de reCAPTCHA aquí
+
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -18,7 +20,6 @@ const whitelist = [
   "http://localhost",
   "http://buzonjaver.com",
 ];
-
 const corsOptions = {
   origin: function (origin, callback) {
     if (whitelist.indexOf(origin) !== -1 || !origin) {
@@ -31,44 +32,71 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Ruta para manejar el envío del formulario
-app.post("/enviar-correo", (req, res) => {
-  const { nombre, telefono, email, desarrollo, mensaje } = req.body;
+app.post("/enviar-correo", async (req, res) => {
+  const {
+    nombre,
+    telefono,
+    email,
+    desarrollo,
+    mensaje,
+    "g-recaptcha-response": recaptchaToken,
+  } = req.body;
 
-  // Configurar el transporte del correo electrónico usando nodemailer
-  let transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      user: "grupojaver@gmail.com", //  Cambiar por tu dirección de correo desde donde se enviarán los correos
-      pass: "okjy snbu tcks xavp", // Cambiar por la contraseña de tu correo
-      // user: "noreply@javer.com.mx",  Cambiar por tu dirección de correo desde donde se enviarán los correos
-      //  pass: "N0r3ply2020M",  Cambiar por la contraseña de tu correo
-    },
-  });
+  // Validar el token de reCAPTCHA
+  if (!recaptchaToken) {
+    return res.status(400).send("Falta el token de reCAPTCHA");
+  }
 
-  // Configurar los datos del correo
-  let mailOptions = {
-    from: "grupojaver@gmail.com", // Cambiar por tu dirección de correo
-    to: "reno7882@gmail.com", // Dirección de correo a la que se enviará el formulario
-    subject: "Nuevo mensaje Sugerencia / recomendación",
-    text: `Nombre: ${nombre}\nTeléfono: ${telefono}\nEmail: ${email}\nDesarrollo: ${desarrollo}\nMensaje: ${mensaje}`,
-    bcc: "rct@javer.com.mx", // Dirección de correo en copia oculta (BCC)
-  };
+  try {
+    const captchaResponse = await fetch(
+      "https://www.google.com/recaptcha/api/siteverify",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `secret=${RECAPTCHA_SECRET}&response=${recaptchaToken}`,
+      },
+    );
 
-  // Enviar el correo electrónico
-  transporter.sendMail(mailOptions, (error, info) => {
-    if (error) {
-      console.error("Error al enviar el correo:", error);
-      res
-        .status(500)
-        .type("text/plain")
-        .send("Hubo un error al enviar el correo");
-    } else {
-      console.log("Correo enviado: %s", info.response);
-      // res.status(200).send("Correo enviado correctamente");
-      // Redirigir al usuario a la página de gracias
-      res.redirect("https://javer.com.mx/gracias");
+    const captchaData = await captchaResponse.json();
+
+    if (!captchaData.success) {
+      console.error(
+        "Error en verificación de reCAPTCHA:",
+        captchaData["error-codes"],
+      );
+      return res.status(400).send("Falló la verificación de reCAPTCHA");
     }
-  });
+
+    // Si el captcha fue exitoso, enviar el correo
+    let transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: "grupojaver@gmail.com",
+        pass: "okjy snbu tcks xavp",
+      },
+    });
+
+    let mailOptions = {
+      from: "grupojaver@gmail.com",
+      to: "reno7882@gmail.com",
+      subject: "Nuevo mensaje Sugerencia / recomendación",
+      text: `Nombre: ${nombre}\nTeléfono: ${telefono}\nEmail: ${email}\nDesarrollo: ${desarrollo}\nMensaje: ${mensaje}`,
+      bcc: "rct@javer.com.mx",
+    };
+
+    transporter.sendMail(mailOptions, (error, info) => {
+      if (error) {
+        console.error("Error al enviar el correo:", error);
+        return res.status(500).send("Hubo un error al enviar el correo");
+      } else {
+        console.log("Correo enviado: %s", info.response);
+        return res.redirect("https://javer.com.mx/gracias");
+      }
+    });
+  } catch (err) {
+    console.error("Error al validar reCAPTCHA:", err);
+    res.status(500).send("Error interno al verificar reCAPTCHA");
+  }
 });
 
 // Iniciar el servidor
