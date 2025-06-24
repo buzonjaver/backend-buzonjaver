@@ -1,50 +1,50 @@
 import nodemailer from "nodemailer";
 import cors from "cors";
-import express from "express";
 import fetch from "node-fetch";
+import express from "express";
 
 const app = express();
-
-// Middleware CORS
-app.use(
-  cors({
-    origin: "*", // Cambia a tu dominio en producción
-    methods: ["POST"],
-  }),
-);
-
-// Middleware para parsear JSON
-app.use(express.json());
+app.use(cors());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 
-// Ruta POST /enviar-correo
 app.post("/enviar-correo", async (req, res) => {
-  const { nombre, email, mensaje, token } = req.body;
+  const { nombre, email, mensaje, telefono, desarrollo } = req.body;
+  const recaptchaToken = req.body["g-recaptcha-response"];
 
-  // Validación básica
-  if (!nombre || !email || !mensaje || !token) {
+  if (
+    !nombre ||
+    !email ||
+    !mensaje ||
+    !telefono ||
+    !desarrollo ||
+    !recaptchaToken
+  ) {
     return res.status(400).json({ message: "Faltan campos requeridos" });
   }
 
-  // Validar token de reCAPTCHA
+  // Validar reCAPTCHA v2
   try {
     const secretKey = process.env.RECAPTCHA_SECRET_KEY;
-    const recaptchaURL = `https://www.google.com/recaptcha/api/siteverify?secret=${secretKey}&response=${token}`;
+    const recaptchaURL = `https://www.google.com/recaptcha/api/siteverify`;
 
-    const response = await fetch(recaptchaURL, { method: "POST" });
+    const response = await fetch(recaptchaURL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `secret=${secretKey}&response=${recaptchaToken}`,
+    });
+
     const data = await response.json();
 
-    if (!data.success || (data.score !== undefined && data.score < 0.5)) {
-      return res
-        .status(403)
-        .json({ message: "reCAPTCHA inválido o sospechoso" });
+    if (!data.success) {
+      return res.status(403).json({ message: "reCAPTCHA inválido" });
     }
   } catch (error) {
-    console.error("Error con reCAPTCHA:", error);
+    console.error("Error en reCAPTCHA:", error);
     return res.status(500).json({ message: "Error al verificar reCAPTCHA" });
   }
 
-  // Configurar transporte de nodemailer
+  // Enviar correo
   const transporter = nodemailer.createTransport({
     host: "smtp.tu-servidor.com",
     port: 465,
@@ -60,18 +60,20 @@ app.post("/enviar-correo", async (req, res) => {
       from: `"${nombre}" <${email}>`,
       to: "tu-correo@ejemplo.com",
       subject: "Nuevo mensaje desde el formulario",
-      text: mensaje,
+      text: `
+Nombre: ${nombre}
+Correo: ${email}
+Teléfono: ${telefono}
+Desarrollo: ${desarrollo}
+Mensaje: ${mensaje}`,
     });
 
-    return res.status(200).json({ message: "Correo enviado exitosamente" });
+    res.status(200).json({ message: "Correo enviado exitosamente" });
   } catch (error) {
     console.error("Error al enviar correo:", error);
-    return res.status(500).json({ message: "Error al enviar el correo" });
+    res.status(500).json({ message: "Error al enviar el correo" });
   }
 });
 
-// Servidor escuchando en puerto 3000 o puerto definido en env
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Servidor escuchando en puerto ${PORT}`);
-});
+// Para Vercel
+export default app;
