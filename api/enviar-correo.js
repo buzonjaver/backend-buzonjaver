@@ -22,7 +22,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ message: "Método no permitido" });
   }
 
-  const origin = req.headers.origin || "";
+  const origin = req.headers.origin || req.headers.referer || "";
   const isBuzon = origin.includes("buzonjaver.com");
 
   const {
@@ -87,6 +87,14 @@ Mensaje: ${mensaje}
 
   try {
     await transporter.sendMail(mailOptions);
+    if (isBuzon) {
+      // Redirige si viene de buzonjaver.com
+      return res.redirect(
+        302,
+        "http://javer.com.mx/gracias?utm_source=plazas&utm_medium=QR&utm_campaign=landing&utm_term=buzon",
+      );
+    }
+
     return res.status(200).json({ message: "Correo enviado correctamente" });
   } catch (error) {
     console.error("Error enviando correo:", error);
