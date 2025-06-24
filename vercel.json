@@ -1,11 +1,16 @@
 {
   "version": 2,
-  "builds": [{ "src": "./api/enviar-correo.js", "use": "@vercel/node" }],
+  "builds": [{ "src": "api/enviar-correo.js", "use": "@vercel/node" }],
   "routes": [
     {
       "src": "/enviar-correo",
       "methods": ["POST", "OPTIONS"],
-      "dest": "/api/enviar-correo"
+      "dest": "/api/enviar-correo.js"
+    },
+    {
+      "src": "/api/enviar-correo",
+      "methods": ["POST", "OPTIONS"],
+      "dest": "/api/enviar-correo.js"
     },
     {
       "src": "/(.*)",
