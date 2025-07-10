@@ -102,7 +102,7 @@ Mensaje: ${mensaje}
       // Redirige si viene de buzonjaver.com
       return res.redirect(
         302,
-        "http://javer.com.mx/gracias?utm_source=plazas&utm_medium=QR&utm_campaign=landing&utm_term=buzon",
+        "https://buzonjaver.com/sugerencias-gracias.html",
       );
     }
 
