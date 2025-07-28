@@ -1,5 +1,5 @@
-import nodemailer from "nodemailer";
 import fetch from "node-fetch";
+import nodemailer from "nodemailer";
 
 const RECAPTCHA_SECRET_KEY = "6LdxGWwrAAAAAO-3qxxIISBNTKMeuU5d8GbO1qC-";
 
@@ -34,51 +34,73 @@ export default async function handler(req, res) {
     return res.status(405).json({ message: "Método no permitido" });
   }
 
-  const isBuzon = origin.includes("buzonjaver.com");
-
   const {
     nombre,
     telefono,
     email,
     desarrollo,
     mensaje,
+    aviso,
     "g-recaptcha-response": token,
   } = req.body;
 
-  if (!nombre || !telefono || !email || !desarrollo || !mensaje) {
-    return res.status(400).json({ message: "Faltan campos requeridos" });
+  // Validación de campos requeridos
+  const requiredFields = { nombre, telefono, email, desarrollo, mensaje, token };
+  for (const [key, value] of Object.entries(requiredFields)) {
+    if (!value || typeof value !== "string" || value.trim() === "") {
+      return res.status(400).json({ message: `El campo "${key}" es obligatorio.` });
+    }
   }
 
-  // Solo validar reCAPTCHA si NO viene de buzonjaver.com
-  if (!isBuzon) {
-    if (!token) {
-      return res
-        .status(400)
-        .json({ message: "Faltan campos requeridos o reCAPTCHA" });
-    }
+  // Validación avanzada
+  const nameRegex = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]{4,}$/;
+  if (!nameRegex.test(nombre)) {
+    return res
+      .status(400)
+      .json({ message: "Nombre inválido. Usa solo letras y al menos 4 caracteres." });
+  }
 
-    try {
-      const params = new URLSearchParams();
-      params.append("secret", RECAPTCHA_SECRET_KEY);
-      params.append("response", token);
+  const phoneRegex = /^[0-9]{8,10}$/;
+  if (!phoneRegex.test(telefono)) {
+    return res
+      .status(400)
+      .json({ message: "Teléfono inválido. Debe contener solo números y entre 8 y 10 dígitos." });
+  }
 
-      const recaptchaRes = await fetch(
-        "https://www.google.com/recaptcha/api/siteverify",
-        {
-          method: "POST",
-          body: params,
-        },
-      );
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ message: "Correo electrónico inválido." });
+  }
 
-      const recaptchaJson = await recaptchaRes.json();
+  // Validar checkbox de aviso
+  const avisoValido =
+    aviso === true || aviso === "true" || aviso === "on" || aviso === 1;
+  if (!avisoValido) {
+    return res.status(400).json({ message: "Debes aceptar el aviso de privacidad." });
+  }
 
-      if (!recaptchaJson.success) {
-        return res.status(403).json({ message: "reCAPTCHA inválido" });
+  // Validar reCAPTCHA
+  try {
+    const params = new URLSearchParams();
+    params.append("secret", RECAPTCHA_SECRET_KEY);
+    params.append("response", token);
+
+    const recaptchaRes = await fetch(
+      "https://www.google.com/recaptcha/api/siteverify",
+      {
+        method: "POST",
+        body: params,
       }
-    } catch (error) {
-      console.error("Error validando reCAPTCHA:", error);
-      return res.status(500).json({ message: "Error validando reCAPTCHA" });
+    );
+
+    const recaptchaJson = await recaptchaRes.json();
+
+    if (!recaptchaJson.success) {
+      return res.status(403).json({ message: "reCAPTCHA inválido" });
     }
+  } catch (error) {
+    console.error("Error validando reCAPTCHA:", error);
+    return res.status(500).json({ message: "Error validando reCAPTCHA" });
   }
 
   const mailOptions = {
@@ -97,21 +119,14 @@ Mensaje: ${mensaje}
 
   try {
     await transporter.sendMail(mailOptions);
-
-    if (isBuzon) {
-      // Redirige si viene de buzonjaver.com
-      return res.redirect(
-        302,
-        "https://buzonjaver.com/sugerencias-gracias.html",
-      );
-    }
-
     return res.status(200).json({ message: "Correo enviado correctamente" });
   } catch (error) {
     console.error("Error enviando correo:", error);
     return res.status(500).json({ message: "Error enviando correo" });
   }
 }
+
+
 
 // import nodemailer from "nodemailer";
 // import fetch from "node-fetch";
